@@ -31,6 +31,9 @@ import time
 global logger
 global CONF
 
+admin_db_bp = SQLAlchemy()
+db = admin_db_bp
+
 g_stat = {"cycle":1, "pos":0,'could_use':0, "total":0, "asigned":0, "req":0, "rereq":0, "none":0, "boot_ts": libcommon.now(), "reset_ts":libcommon.now()}
 g_records = []
 
@@ -72,7 +75,7 @@ def TakeOutCksFromDB(cks_num):
     else:
         take_num = total
 
-    logger.debug('准备从数据库取出cookies数量：%d', take_num)
+    logger.debug('准备从数据库取出cookie数量：%d', take_num)
     records = libdb.LibDB().query_num_by_condition(take_num,condition, CONF['database']['table'])
     return records
 
@@ -194,11 +197,10 @@ class MyHomeView(admin.AdminIndexView):
         return self.render("console.html", g_stat=g_stat, task_records=tasks)
 
 admin_bp = admin.Admin(name="CK控制台",base_template='my_master.html',index_view=MyHomeView(url='/admin',endpoint='admin'),template_mode='bootstrap3')
-#admin_bp = admin.Admin(name="CK控制台",index_view=MyHomeView(url='/admin',endpoint='admin'),template_mode='bootstrap3')
 
 
 # Create custom admin view
-class AdminTaskView(admin.BaseView):
+class RedisTaskView(admin.BaseView):
     def is_accessible(self):
         return (current_user.is_active and
                 current_user.is_authenticated and
@@ -219,8 +221,8 @@ class AdminTaskView(admin.BaseView):
 
     @admin.expose('/')
     def index(self):
-        tasks = libcommon.getTaskList()
-        return self.render('admin/task.html',  task_records=tasks)
+        tasks = libcommon.getActiveTaskList()
+        return self.render('admin/redistask.html',  task_records=tasks)
 
     @admin.expose('/del_task')
     def del_task(self):
@@ -238,75 +240,14 @@ class AdminTaskView(admin.BaseView):
         return redirect(url_for('redis-task.index'))
 
 #admin_bp.add_view(AdminTaskView(name='任务列表',endpoint='task'))
-admin_bp.add_view(AdminTaskView(name='任务列表',endpoint='task',category='任务'))
-
-# BufferView
-class BufferView(admin.BaseView):
-    @admin.expose('/',  methods=['POST', 'GET'])
-    def index(self):
-        if request.method == 'POST':
-            userIdStr = request.form.get('user_id')
-        else:
-            userIdStr = request.args.get('user')
-
-        if userIdStr != None:
-            userId = int(userIdStr)
-        else:
-            # default 0
-            userId = 0
-
-        # 获取表项数量
-       
-        stat = libcommon.getUserStat(userId)
-        cookies = libcommon.getUserCookieList(userId)
-        total_renqi = libcommon.total_renqi_get(userId)
-        return self.render('/admin/buffer.html',  g_stat=stat,user=userId, cookie_records=cookies, total_renqi=total_renqi)
-
-    @admin.expose('/buffer_clear', methods=['POST', 'GET'])
-    def buffer_clear(self):
-        userIdStr = request.args.get('user')
-        if userIdStr != None:
-            userId = int(userIdStr)
-        else:
-            # default 0
-            userId = 0
-        CNT = libcommon.clear_records(userId)
-        return redirect(url_for('redis-cookies.index', user=userId))
-    
-    @admin.expose('/alloc_renqi',methods=('GET', 'POST'))
-    def alloc_renqi(self):
-        global g_stat
-        if request.method == 'POST':
-            renqi_req = request.form.get('renqi_req')
-            userIdStr = request.args.get('user')
-            if userIdStr != None:
-                userId = int(userIdStr)
-            else:
-                # default 0
-                userId = 0
-            logger.debug('alloc_cookie renqi_req: %s',  renqi_req)
-            
-            total = float(renqi_req)
-            alloced = libcommon.renqi_alloc(userId, total)
-
-        return redirect(url_for('redis-cookies.index', user=userId))
-      
-    @admin.expose('/move/', methods=('GET', 'POST'))
-    def move_view(self):
-        # render your view here
-        libcommon.moveTaskFromRedistoDB()
-        return "move success!"
-      
-admin_bp.add_view(BufferView(name='缓存Cookie',endpoint='redis-cookies',category='Cookies'))
-
-admin_db_bp = SQLAlchemy()
-db = admin_db_bp
+admin_bp.add_view(RedisTaskView(name='任务列表',endpoint='redis-task',category='任务'))
 
 # Create models
-class Tasktb(db.Model):
+class DbTask(db.Model):
     __tablename__='task'
     id              = db.Column(db.Integer, primary_key=True)
     task_id         = db.Column(db.String(32))
+    order_id       = db.Column(db.Integer)
     effective       = db.Column(db.Integer)
     user_id         = db.Column(db.Integer)
     reset_done      = db.Column(db.Integer)
@@ -330,7 +271,7 @@ class Tasktb(db.Model):
         return "{}: {}".format(self.id, self.__str__())
 
 
-class AdminDbTaskView(sqla.ModelView):
+class DbTaskView(sqla.ModelView):
     can_create = False
     action_disallowed_list = ['delete', ]
     #form_args = dict(regdate=((int)(time.time())))
@@ -339,6 +280,7 @@ class AdminDbTaskView(sqla.ModelView):
     column_display_pk = True
     column_list = [
         'id',
+        'order_id',
         'task_id',
         'effective',
         'user_id',
@@ -375,10 +317,146 @@ class AdminDbTaskView(sqla.ModelView):
                 # login
                 return redirect(url_for('security.login', next=request.url))
 
-admin_bp.add_view(AdminDbTaskView(Tasktb, db.session, name='固化任务',endpoint='db-task',category='任务'))
+admin_bp.add_view(DbTaskView(DbTask, db.session, name='固化任务',endpoint='db-task',category='任务'))
+
+# RedisCookieView
+class RedisCookieView(admin.BaseView):
+    @admin.expose('/',  methods=['POST', 'GET'])
+    def index(self):
+        if request.method == 'POST':
+            userIdStr = request.form.get('user_id')
+        else:
+            userIdStr = request.args.get('user')
+
+        if userIdStr != None:
+            userId = int(userIdStr)
+        else:
+            # default 0
+            userId = 0
+
+        # 获取表项数量
+       
+        stat = libcommon.getUserStat(userId)
+        cookie_records = libcommon.getUserCookieList(userId)
+        total_renqi = libcommon.total_renqi_get(userId)
+        return self.render('/admin/rediscookie.html',  g_stat=stat,user=userId, cookie_records=cookie_records, total_renqi=total_renqi)
+
+    @admin.expose('/clear', methods=['POST', 'GET'])
+    def clear(self):
+        userIdStr = request.args.get('user')
+        if userIdStr != None:
+            userId = int(userIdStr)
+        else:
+            # default 0
+            userId = 0
+        CNT = libcommon.clear_records(userId)
+        return redirect(url_for('redis-cookie.index', user=userId))
+    
+    @admin.expose('/alloc',methods=('GET', 'POST'))
+    def alloc(self):
+        global g_stat
+        if request.method == 'POST':
+            renqi_req = request.form.get('renqi_req')
+            userIdStr = request.args.get('user')
+            if userIdStr != None:
+                userId = int(userIdStr)
+            else:
+                # default 0
+                userId = 0
+            logger.debug('alloc_cookie renqi_req: %s',  renqi_req)
+            
+            total = float(renqi_req)
+            alloced = libcommon.renqi_alloc(userId, total)
+
+        return redirect(url_for('redis-cookie.index', user=userId))
+      
+admin_bp.add_view(RedisCookieView(name='缓存Cookie',endpoint='redis-cookie',category='Cookie'))
+
+# Create custom admin view
+class CreateTaskView(admin.BaseView):
+    @admin.expose('/')
+    def index(self):
+        order_id = request.args.get('order_id')
+
+        logger.debug('order_id: %s', order_id)
+
+        if order_id == None:
+            order_id = 1
+
+        order = libcommon.getOrder(order_id)
+
+        if order == None:
+            return redirect(url_for('Order.index_view'))
+            #return self.render('admin/order.html',order=order)
+        else:
+            return self.render('admin/createtask.html',order=order)
+
+    @admin.expose('/submit_task', methods=['POST', 'GET'])
+    def submit_task(self):
+        global g_stat
+        if request.method == 'POST':
+            
+            order_id = request.form.get('order_id')
+            begin_time = request.form.get('begin_time')
+            task_time = request.form.get('task_time')
+            total_time = request.form.get('total_time')
+
+            
+            renqi_num = request.form.get('renqi_num')
+            last_time_from = request.form.get('last_time_from')
+            last_time_to = request.form.get('last_time_to')
+            time_gap = request.form.get('time_gap')
+            gap_num = request.form.get('gap_num')
+            userId = request.form.get('user_id')
+
+
+            logger.debug('begin_time: %s, total_time:%s' %(begin_time, total_time))
+            logger.debug('renqi_num: %s' %(renqi_num))
+            logger.debug('last_time_from:%s, last_time_to:%s' %(last_time_from, last_time_to))
+            logger.debug('time_gap:%s, gap_num:%s' %(time_gap, gap_num))
+
+            begin_time_s = begin_time.replace('T', ' ')
+            begin_timestamp = libcommon.strToTimestamp(begin_time_s)
+
+            room_url = request.form.get('room_url')
+            ck_url = request.form.get('ck_url')
+
+            order = libcommon.getOrder(order_id)
+            room_url = libcommon.room_url(order['platform'], order['room_id'])
+            ck_url = "http://127.0.0.1:8200/useradmin/cookie?user=%s" %(userId)
+
+            logger.debug('room_url: %s, ck_url: %s' %(room_url, ck_url))
+
+            req_renqi = int(renqi_num)
+
+            userId = int(userId)
+            alloced = libcommon.renqi_alloc(userId, req_renqi)
+
+            ck_num = libcommon.cookie_num_for_renqi(userId, req_renqi)
+            
+            logger.debug(' req_renqi %d, alloced %d, ck_num %d' %(req_renqi, alloced, ck_num))
+            
+
+            task_min = int(task_time)
+            total_min = int(total_time)
+            cur_min = 0
+            while cur_min < task_min:
+                cur_timestamp = begin_timestamp + (cur_min * 60)
+                cur_time_s =  time.localtime(cur_timestamp)
+                cur_time_f = time.strftime("%Y-%m-%dT%H:%M:%S",cur_time_s)
+                libcommon.writeTaskToRedis(order_id, userId, room_url, ck_url, cur_time_f, total_time, \
+                                       ck_num, last_time_from, last_time_to, time_gap, gap_num)
+                cur_min += total_min
+
+                logger.debug('task_min:%d, cur_min:%d, cur_time_s=%s' %(task_min, cur_min, cur_time_s))
+        return redirect(url_for('redis-task.index'))
+
+    
+
+admin_bp.add_view(CreateTaskView(name='创建任务',endpoint='createtask',category='任务' ))
 
 # Create models
-class Cookie(db.Model):
+class DbCookie(db.Model):
     __tablename__='cktb'
     id = db.Column(db.Integer, primary_key=True)
     uid = db.Column(db.Integer)
@@ -394,7 +472,7 @@ class Cookie(db.Model):
     def __repr__(self):
         return "{}: {}".format(self.id, self.__str__())
 
-class CookieAdmin(sqla.ModelView):
+class DbCookieView(sqla.ModelView):
     #can_create = False
     #can_export = True
     #form_args = dict(regdate=((int)(time.time())))
@@ -433,7 +511,7 @@ class CookieAdmin(sqla.ModelView):
                 # login
                 return redirect(url_for('security.login', next=request.url))
 
-admin_bp.add_view(CookieAdmin(Cookie, db.session,name='固化Cookie', endpoint='db-cookies',category='Cookies'))
+admin_bp.add_view(DbCookieView(DbCookie, db.session,name='固化Cookie', endpoint='db-cookie',category='Cookie'))
 
 #supplier models
 
@@ -454,7 +532,7 @@ class Supplier(db.Model):
 class SupplierModelConverter(AdminModelConverter):
     pass
 
-class SupplierAdmin(sqla.ModelView):
+class SupplierView(sqla.ModelView):
     list_template = 'admin/supplier.html'
     model_form_converter = SupplierModelConverter
     action_disallowed_list = ['delete', ]
@@ -468,10 +546,13 @@ class SupplierAdmin(sqla.ModelView):
         'note',
     ]
     column_default_sort = [('id', False)]  # sort by field id
-admin_bp.add_view(SupplierAdmin(Supplier,  db.session,name='Cookie供应商', endpoint='Supplier', category='Cookies'))
+admin_bp.add_view(SupplierView(Supplier,  db.session,name='Cookie供应商', endpoint='supplier', category='Cookie'))
 
 #Group models
-from wtforms import IntegerField, FloatField, StringField, SelectField, DateField, DateTimeField, FileField, TextAreaField, form, Form
+from wtforms import IntegerField, FloatField, StringField, SelectField, FileField, TextAreaField, form, Form
+
+from wtforms.fields.html5 import DateField, DateTimeField, TimeField
+
 from wtforms.ext.sqlalchemy.fields import QuerySelectField
 
 class Group(db.Model):
@@ -544,10 +625,8 @@ class GroupForm(Form):
         else:
             return False
 
-    
 
-
-class GroupAdmin(sqla.ModelView):
+class GroupView(sqla.ModelView):
 
     form = GroupForm
     list_template = 'admin/group.html'
@@ -573,73 +652,42 @@ class GroupAdmin(sqla.ModelView):
     ]
     #column_default_sort = [('nickname', False), ('password', False)]  # sort on multiple columns
     column_default_sort = [('id', False)]  # sort by field id
-admin_bp.add_view(GroupAdmin(Group,  db.session,name='Cookie组', endpoint='Group', category='Cookies'))
-
-# Custom
-class Custom(db.Model):
-    __tablename__='custb'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(20),unique=True)
-    ctime = db.Column(db.TIMESTAMP(True))
-    note   = db.Column(db.Text)
-
-    def __str__(self):
-        return "{}, {}".format(self.name)
-
-    def __repr__(self):
-        return "{}: {}".format(self.id, self.__str__())
+admin_bp.add_view(GroupView(Group,  db.session,name='Cookie组', endpoint='Group', category='Cookie'))
 
 
-class CustomModelConverter(AdminModelConverter):
-    pass
+# Order
 
-class CustomAdmin(sqla.ModelView):
-    model_form_converter = CustomModelConverter
-    action_disallowed_list = ['delete', ]
-    can_view_details = True
-    column_display_pk = True
-    can_export = True
-    column_list = [
-        'id',
-        'name',
-        'ctime',
-        'note',
-    ]
-    column_default_sort = [('id', False)]  # sort by field id
-admin_bp.add_view(CustomAdmin(Custom,  db.session,name='客户', endpoint='Custom',category='需求'))
-
-# Orders
-
+#from flask.ext.admin.form import widgets
 class OrderForm(Form):
-    def custom_query_factory():
-        return [r.name for r in db.session.query(Custom).all()]
 
-    def custom_get_pk(obj):
-        return obj
+    #name = StringField('名称')
 
-    name = StringField('名称')
-
-    custom = QuerySelectField('客户', query_factory=custom_query_factory, get_pk=custom_get_pk)
+    room_id = IntegerField('房间号', default=0)
 
     platform_choices   = [('douyu', u'斗鱼'), ('huya', u'虎牙'), ('qie', u'企鹅')]
     platform = SelectField(label=u'平台', choices=platform_choices)
 
+    custom = StringField('工会')
+
     type_choices   = [('renqi', u'人气'), ('huya', u'排名')]
     order_type = SelectField(label=u'类型', choices=type_choices)
 
-    room_id = IntegerField('房间号', default=0)
+    
     renqi      = IntegerField('人气', default=0)
     income   = IntegerField('收入', default=0) 
-    sdate      = DateField('开始日期')
-    edate      = DateField('结束日期')
+    sdate      = DateField('开始日期', format='%Y-%m-%d')
+    edate      = DateField('结束日期', format='%Y-%m-%d')
+    stime      = TimeField('开播时间', format='%H:%M')
+    etime      = TimeField('下播时间', format='%H:%M')
     note       = TextAreaField('备注')
 
-class Orders(db.Model):
+import libdouyu
+class Order(db.Model):
     __tablename__='ordtb'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255))
     custom = db.Column(db.String(255))
+    status = db.Column(db.String(255))
     platform = db.Column(db.String(255))
     room_id = db.Column(db.String(255))
     order_type =  db.Column(db.String(255))
@@ -648,6 +696,8 @@ class Orders(db.Model):
     ctime = db.Column(db.TIMESTAMP(True))
     sdate = db.Column(db.Date())
     edate = db.Column(db.Date())
+    stime = db.Column(db.Time())
+    etime = db.Column(db.Time())
     note = db.Column(db.Text)
 
     def __str__(self):
@@ -656,28 +706,71 @@ class Orders(db.Model):
     def __repr__(self):
         return "{}: {}".format(self.id, self.__str__())
 
+    
+    @property
+    def online(self):
+        info = libdouyu.getRoomInfo(self.room_id)
 
-class OrderAdmin(sqla.ModelView):
+        if info == None:
+            return "查询错误！"
+        
+        if info['room_status'] == '1':
+            return "开播"
+        else:
+            return "下播"
+
+    @property
+    def hot(self):
+        info = libdouyu.getRoomInfo(self.room_id)
+
+        if info == None:
+            return "查询错误！"
+        
+        return info['online']
+
+    #status['room_name'] = rdata['room_name']
+    @property
+    def title(self):
+        info = libdouyu.getRoomInfo(self.room_id)
+
+        if info == None:
+            return "查询错误！"
+        
+        return info['room_name']
+
+    @property
+    def owner(self):
+        info = libdouyu.getRoomInfo(self.room_id)
+
+        if info == None:
+            return "查询错误！"
+        
+        return info['owner_name']
+
+
+class OrderView(sqla.ModelView):
 
     form = OrderForm
-    list_template = 'admin/orders.html'
+    list_template = 'admin/order.html'
     can_view_details = True
     column_display_pk = True
     edit_modal=True
+    create_modal = True
     column_searchable_list=['custom', 'platform', 'room_id', 'order_type', 'renqi']
     column_list = [
         'id',
-        'name',
-        'custom',
-        'platform',
         'room_id',
+        'platform',
+        'status',
+        'online',
+        'hot',
+        'title',
+        'owner',
         'order_type',
         'renqi',
         'income',
-        'ctime',
         'sdate',
         'edate',
-        'note',
     ]
 
     def is_accessible(self):
@@ -698,90 +791,7 @@ class OrderAdmin(sqla.ModelView):
                 # login
                 return redirect(url_for('security.login', next=request.url))
 
-admin_bp.add_view(OrderAdmin(Orders, db.session,name='需求列表',endpoint='Orders',category='需求'))
-
-# Create custom admin view
-class CreateTaskView(admin.BaseView):
-    @admin.expose('/')
-    def index(self):
-        order_id = request.args.get('order_id')
-
-        logger.debug('order_id: %s', order_id)
-
-        if order_id == None:
-            order_id = 1
-
-        order = libcommon.getOrder(order_id)
-
-        if order == None:
-            return redirect(url_for('Orders.index_view'))
-            #return self.render('admin/orders.html',order=order)
-        else:
-            return self.render('admin/createtask.html',order=order)
-
-    @admin.expose('/submit_task', methods=['POST', 'GET'])
-    def submit_task(self):
-        global g_stat
-        if request.method == 'POST':
-            
-            order_id = request.form.get('order_id')
-            begin_time = request.form.get('begin_time')
-            task_time = request.form.get('task_time')
-            total_time = request.form.get('total_time')
-
-            
-            renqi_num = request.form.get('renqi_num')
-            last_time_from = request.form.get('last_time_from')
-            last_time_to = request.form.get('last_time_to')
-            time_gap = request.form.get('time_gap')
-            gap_num = request.form.get('gap_num')
-            userId = request.form.get('user_id')
-
-
-            logger.debug('begin_time: %s, total_time:%s' %(begin_time, total_time))
-            logger.debug('renqi_num: %s' %(renqi_num))
-            logger.debug('last_time_from:%s, last_time_to:%s' %(last_time_from, last_time_to))
-            logger.debug('time_gap:%s, gap_num:%s' %(time_gap, gap_num))
-
-            begin_time_s = begin_time.replace('T', ' ')
-            begin_timestamp = libcommon.strToTimestamp(begin_time_s)
-
-            room_url = request.form.get('room_url')
-            ck_url = request.form.get('ck_url')
-
-            order = libcommon.getOrder(order_id)
-            room_url = libcommon.room_url(order['platform'], order['room_id'])
-            ck_url = "http://127.0.0.1:8200/useradmin/cookie?user=%s" %(userId)
-
-            logger.debug('room_url: %s, ck_url: %s' %(room_url, ck_url))
-
-            req_renqi = int(renqi_num)
-
-            userId = int(userId)
-            alloced = libcommon.renqi_alloc(userId, req_renqi)
-
-            ck_num = libcommon.renqi_to_cookies(userId, req_renqi)
-            
-            logger.debug(' req_renqi %d, alloced %d, ck_num %d' %(req_renqi, alloced, ck_num))
-            
-
-            task_min = int(task_time)
-            total_min = int(total_time)
-            cur_min = 0
-            while cur_min < task_min:
-                cur_timestamp = begin_timestamp + (cur_min * 60)
-                cur_time_s =  time.localtime(cur_timestamp)
-                cur_time_f = time.strftime("%Y-%m-%dT%H:%M:%S",cur_time_s)
-                libcommon.writeTaskToRedis(userId, room_url, ck_url, cur_time_f, total_time, \
-                                       ck_num, last_time_from, last_time_to, time_gap, gap_num)
-                cur_min += total_min
-
-                logger.debug('task_min:%d, cur_min:%d, cur_time_s=%s' %(task_min, cur_min, cur_time_s))
-        return redirect(url_for('redis-task.index'))
-
-    
-
-admin_bp.add_view(CreateTaskView(name='创建任务',endpoint='createtask',category='任务' ))
+admin_bp.add_view(OrderView(Order, db.session,name='需求',endpoint='Order'))
 
 # Role
 # Define models

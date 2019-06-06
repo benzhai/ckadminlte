@@ -560,7 +560,7 @@ def strToTimestamp(str):
     timestamp = int(time.mktime(timeArray))
     return timestamp
 
-def writeTaskToRedis(userId, room_url, ck_url, begin_time, total_time, \
+def writeTaskToRedis(order_id, userId, room_url, ck_url, begin_time, total_time, \
                      user_num, last_time_from, last_time_to, time_gap, gap_num):
     """
     将用户的任务写入Redis
@@ -578,6 +578,7 @@ def writeTaskToRedis(userId, room_url, ck_url, begin_time, total_time, \
     task =dict()
     task['submit_time'] = now()
     task['room_url'] = room_url
+    task['order_id'] = order_id
     #task['ck_url']   = ck_url
     task['begin_time'] = begin_time.replace('T', ' ')
     task['total_time'] = total_time
@@ -677,17 +678,16 @@ def parseOrder(record):
     order = dict()
     order['id'] = record[0]
     order['status'] = record[1]
-    order['name'] = record[2]
-    order['custom'] = record[3]
-    order['platform'] = record[4]  
-    order['room_id'] = record[5]
-    order['order_type'] = record[6]
-    order['renqi'] = record[7]
-    order['income'] = record[8]
-    order['ctime'] = record[9]
-    order['sdate'] = record[10]
-    order['edate'] = record[11]
-    order['note'] = record[12]
+    order['custom'] = record[2]
+    order['platform'] = record[3]  
+    order['room_id'] = record[4]
+    order['order_type'] = record[5]
+    order['renqi'] = record[6]
+    order['income'] = record[7]
+    order['ctime'] = record[8]
+    order['sdate'] = record[9]
+    order['edate'] = record[10]
+    order['note'] = record[11]
 
     return order
 
@@ -745,6 +745,30 @@ def getTaskList():
         else:
             task_dict['status'] = 'Cancelled'
         tasks_list.append(task_dict)
+    tasks_list.reverse()
+    return tasks_list
+
+def getActiveTaskList():
+    tasks_list = list()
+
+    #任务存储在DB15中，故获取
+    crack = libredis.LibRedis(15)
+    task_num = crack.zCard(CONF['redis']['begintask'])
+    if task_num == 0:
+        return tasks_list
+
+    tasks = crack.zRange(CONF['redis']['begintask'], 0, task_num-1)
+    for task in tasks:
+        task_dict = crack.hashGetAll(task)
+        if task_dict == None:
+            logger.error('异常，在redis中找不到表项')
+            continue
+        if (int(task_dict['effective'])) == 1:
+            task_dict['status'] = 'Validated'
+            tasks_list.append(task_dict)
+        else:
+            task_dict['status'] = 'Cancelled'
+        
     tasks_list.reverse()
     return tasks_list
 
@@ -1005,7 +1029,7 @@ def total_renqi_get(userId):
     stat = libredis.LibRedis(userId).hashGetAll('g_stat')
     return float(stat['total_renqi'])
 
-def renqi_to_cookies(userId, renqi):
+def cookie_num_for_renqi(userId, renqi):
     cookies = getUserCookieList(userId)
 
     cur_ck = 0
