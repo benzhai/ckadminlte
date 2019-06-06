@@ -1026,8 +1026,18 @@ def getUserStat(userId):
      return stat
 
 def total_renqi_get(userId):
-    stat = libredis.LibRedis(userId).hashGetAll('g_stat')
-    return float(stat['total_renqi'])
+    cookies = getUserCookieList(userId)
+
+    cur_ck = 0
+    cur_renqi = 0
+   # logger.debug("renqi_to_cookies: userId=%d, renqi=%d, len(cookies)=%d" %(userId, renqi, len(cookies)))
+    for cookie in cookies:
+        cur_renqi += float(cookie['radio'])
+        cur_ck += 1
+
+        logger.debug("renqi_to_cookies: cur_ck=%d, cur_renqi=%d" %(cur_ck, cur_renqi))
+
+    return cur_renqi
 
 def cookie_num_for_renqi(userId, renqi):
     cookies = getUserCookieList(userId)
@@ -1058,7 +1068,7 @@ def add_renqi(total, userId):
     records = takeIdleCK()
 
     if records == None:
-        return renqi_req
+        return alloced
 
     rcs = list()
     for record in records:

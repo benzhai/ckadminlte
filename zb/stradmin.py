@@ -34,7 +34,7 @@ global CONF
 admin_db_bp = SQLAlchemy()
 db = admin_db_bp
 
-g_stat = {"cycle":1, "pos":0,'could_use':0, "total":0, "asigned":0, "req":0, "rereq":0, "none":0, "boot_ts": libcommon.now(), "reset_ts":libcommon.now()}
+g_stat = {"cycle":1, "pos":0,'could_use':0, "total":0, "total_renqi":0, "asigned":0, "req":0, "rereq":0, "none":0, "boot_ts": libcommon.now(), "reset_ts":libcommon.now()}
 g_records = []
 
 
@@ -204,7 +204,7 @@ class RedisTaskView(admin.BaseView):
     def is_accessible(self):
         return (current_user.is_active and
                 current_user.is_authenticated and
-                current_user.has_role('superuser')
+                (current_user.has_role('superuser') or current_user.has_role('user'))
         )
 
     def _handle_view(self, name, **kwargs):
@@ -237,10 +237,12 @@ class RedisTaskView(admin.BaseView):
         if taskIdStr != None:
             libcommon.delTaskFromRedis(userId, taskIdStr)
 
-        return redirect(url_for('redis-task.index'))
+        return redirect(url_for('task.index'))
 
 #admin_bp.add_view(AdminTaskView(name='任务列表',endpoint='task'))
+
 admin_bp.add_view(RedisTaskView(name='任务列表',endpoint='redis-task',category='任务'))
+
 
 # Create models
 class DbTask(db.Model):
@@ -302,7 +304,7 @@ class DbTaskView(sqla.ModelView):
     def is_accessible(self):
         return (current_user.is_active and
                 current_user.is_authenticated and
-                current_user.has_role('superuser')
+                (current_user.has_role('superuser') or current_user.has_role('user'))
         )
 
     def _handle_view(self, name, **kwargs):
@@ -454,6 +456,9 @@ class CreateTaskView(admin.BaseView):
     
 
 admin_bp.add_view(CreateTaskView(name='创建任务',endpoint='createtask',category='任务' ))
+
+
+
 
 # Create models
 class DbCookie(db.Model):
@@ -776,7 +781,7 @@ class OrderView(sqla.ModelView):
     def is_accessible(self):
         return (current_user.is_active and
                 current_user.is_authenticated and
-                current_user.has_role('superuser')
+                (current_user.has_role('superuser') or current_user.has_role('user'))
         )
 
     def _handle_view(self, name, **kwargs):
@@ -792,6 +797,9 @@ class OrderView(sqla.ModelView):
                 return redirect(url_for('security.login', next=request.url))
 
 admin_bp.add_view(OrderView(Order, db.session,name='需求',endpoint='Order'))
+
+
+
 
 # Role
 # Define models
@@ -852,9 +860,9 @@ class MyModelView(sqla.ModelView):
 # Add model views
 admin_bp.add_view(MyModelView(Role, db.session))
 admin_bp.add_view(MyModelView(User, db.session))
-from redis import Redis
-from flask_admin.contrib import rediscli
-admin_bp.add_view(rediscli.RedisCli(Redis()))
+#from redis import Redis
+#from flask_admin.contrib import rediscli
+#admin_bp.add_view(rediscli.RedisCli(Redis()))
 
 
 logger = gl.get_logger()

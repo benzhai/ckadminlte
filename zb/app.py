@@ -71,7 +71,7 @@ def security_context_processor():
 app.secret_key = '\xe5\xcc\xc5\xd9+\xfbC\xc6\xdbD\x1af\xe0\xa6*\xeb$\xa7\xe4\xf6p~\x01\xaf'
 def now():
     return time.strftime("%m-%d %H:%M:%S", time.localtime())
-g_stat = {"cycle":1, "pos":0,'take_out_cks':0, "total":0, "asigned":0, "req":0, "rereq":0, "none":0, "boot_ts": now(), "reset_ts":now()}
+g_stat = {"cycle":1, "pos":0,'take_out_cks':0, "total":0, "total_renqi":0, "asigned":0, "req":0, "rereq":0, "none":0, "boot_ts": now(), "reset_ts":now()}
 g_records = []
 g_cnt = {}
 @app.route('/')
