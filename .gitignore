@@ -6,3 +6,11 @@
 *.spec
 *.exe
 *.rdb
+
+.DS_Store
+ckadminilte.*
+task/TASK.log.*
+zb/.DS_Store
+zb/DY.log.*
+zb/templates/.DS_Store
+zb/uploads/

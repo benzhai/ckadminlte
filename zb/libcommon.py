@@ -13,17 +13,21 @@ import urllib
 import time,datetime
 import globalvar as gl
 
+import re
+
 global logger
 global CONF
+
 
 def now():
     return time.strftime("%m-%d %H:%M:%S", time.localtime())
 
 def cookieWriteToDB(nickname, pwd, cookie, grp):
     key = "nickname, password, grp, regdate, lastdate, colddate, cookie"
-    value = "'%s', '%s', '%s', '%d', '%d', '%d', '%s'" % (nickname, pwd, grp, \
-                                                    int(time.time()), int(time.time()), \
-                                                    int(time.time()), cookie)
+    value = "'%s', '%s', '%s', '%d', '%d', '%d', '%s'" \
+               % (nickname, pwd, grp, \
+                    int(time.time()), int(time.time()), \
+                    int(time.time()), cookie)
     logger.debug('key:%s, value:%s', key, value)
     rv = libdb.LibDB().insert_db(key, value, CONF['database']['table'])
     return rv
@@ -45,6 +49,13 @@ def cookieUpdateToDB(nickname, pwd, cookie):
     rv = libdb.LibDB().update_db(setval, condition, CONF['database']['table'])
     return rv
 
+def setCookieGroupRatio(group, ratio):
+    setval = "ratio='%.2f'" %(ratio)
+    condition = "grp='%s'" %(group)
+    logger.debug('setCookieGroupRatio: setval:%s, condition:%s', setval, condition)
+    rv = libdb.LibDB().update_db(setval, condition, CONF['database']['table'])
+    return rv
+
 def updateColdDateToDB(nickname,timestamp):
     """
     设置冷却时间
@@ -58,19 +69,61 @@ def updateColdDateToDB(nickname,timestamp):
     rv = libdb.LibDB().update_db(setval, condition, CONF['database']['table'])
     return rv
 
-def cookie_csv_parse_for_db(line):
-    row = line.split(',')
-    if len(row) < 3:
-        return None
+def fmt_cookie_parse(row):
+    record['id']       = row[0]
+    record['nickname'] = row[2]
+    record['password'] = row[3]
+    record['regdate']  = datetime.datetime.fromtimestamp(record[4])
+    record['lastdate'] = datetime.datetime.fromtimestamp(record[5])
+    record['colddate'] = datetime.datetime.fromtimestamp(record[6])
+    record['ip']            = row[7]
+    record['usednum']  = row[8]
+    record['cookie']    = row[9]
+    
 
-    if row[0] == "" or row[0] == "名称":
-        return None
-
-    # 名称,密码,Cookies
+def seample_cookie_parse(row):
+     # 名称,密码,Cookies
     record  = {}
     record['nickname']    = row[0]
     record['password']    = row[1]
-    record['cookie']      = row[2]
+    record['cookie']        = row[2]
+
+    return record
+
+def raw_cooke_parse(line):
+
+    result   =  re.findall(r"uid\=(.+?);",line)    
+    if result == None or len(result) < 1:
+        return None
+
+    record  = {}
+    record['uid'] = result[0]
+    record['nickname']    = result[0]
+    record['password']    = ""
+    record['cookie']        = line
+    
+
+    
+
+    logger.debug("raw_cooke_parse: result =%s record['uid'] = %s" %(result, record['uid']))
+
+    return record
+
+def cookie_csv_parse_for_db(line):
+    row = line.split(',')
+    #logger.debug("cookie_csv_parse_for_db:  len(row) = %d!" , len(row))
+    #logger.debug("cookie_csv_parse_for_db:  row[0] = %s!" , row[0])
+    #logger.debug("cookie_csv_parse_for_db:  row[1] = %s!" , row[1])
+    #logger.debug("cookie_csv_parse_for_db:  line = %s!" , line)
+    if len(row)  < 3:
+        record =  raw_cooke_parse(line)
+    elif len(row) == 3 :
+        record =  sample_cookie_parse()
+    elif len(row) == 11:
+       record =  fmt_cookie_parse(row)
+    else:
+        return None
+
     return record
 
 def cookie_load_for_db(path):
@@ -1032,10 +1085,13 @@ def total_renqi_get(userId):
     cur_renqi = 0
    # logger.debug("renqi_to_cookies: userId=%d, renqi=%d, len(cookies)=%d" %(userId, renqi, len(cookies)))
     for cookie in cookies:
-        cur_renqi += float(cookie['radio'])
-        cur_ck += 1
+        logger.debug("renqi_to_cookies:cookie=%s" %(cookie))
 
-        logger.debug("renqi_to_cookies: cur_ck=%d, cur_renqi=%d" %(cur_ck, cur_renqi))
+        if cookie:
+            cur_renqi += float(cookie['radio'])
+            cur_ck += 1
+
+        #logger.debug("renqi_to_cookies: cur_ck=%d, cur_renqi=%d" %(cur_ck, cur_renqi))
 
     return cur_renqi
 

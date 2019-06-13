@@ -365,10 +365,12 @@ class RedisCookieView(admin.BaseView):
             else:
                 # default 0
                 userId = 0
-            logger.debug('alloc_cookie renqi_req: %s',  renqi_req)
+            
             
             total = float(renqi_req)
             alloced = libcommon.renqi_alloc(userId, total)
+
+            logger.debug('/alloc userId=%d renqi_req: %s alloced=%d'  %(userId, renqi_req, alloced))
 
         return redirect(url_for('redis-cookie.index', user=userId))
       
@@ -469,6 +471,7 @@ class DbCookie(db.Model):
     grp = db.Column(db.String(20),unique=True)
     password = db.Column(db.String(32))
     regdate = db.Column(db.Integer)
+    ratio = db.Column(db.Float)
     cookie   = db.Column(db.Text)
 
     def __str__(self):
@@ -492,7 +495,7 @@ class DbCookieView(sqla.ModelView):
         'nickname',
         'password',
         'grp',
-        'regdate',
+        'ratio',
         'cookie',
     ]
     column_filters = ('grp',) 
@@ -623,12 +626,17 @@ class GroupForm(Form):
                 
         return False
 
-    def validate_rrenqi(form, field):
-        if form.number.data and form.rratio.data:
-            field.data = form.number.data * form.rratio.data
-            return True
+    def validate_rratio(form, field):
+        if form.rrenqi.data:
+            field.data =  form.rrenqi.data / form.number.data
+
+            grp = form.name.data
+            rv = libcommon.setCookieGroupRatio(grp,  field.data)
+            logger.info("form.csv.data: %s", form.csv.data)
         else:
-            return False
+            field.data = 1.0
+
+        return True
 
 
 class GroupView(sqla.ModelView):
