@@ -25,6 +25,7 @@ import urllib
 import random
 import globalvar as gl
 import libdb as libdb
+import libredis as libredis
 import libcommon as libcommon
 import time
 
@@ -237,7 +238,7 @@ class RedisTaskView(admin.BaseView):
         if taskIdStr != None:
             libcommon.delTaskFromRedis(userId, taskIdStr)
 
-        return redirect(url_for('task.index'))
+        return redirect(url_for('redis-task.index'))
 
 #admin_bp.add_view(AdminTaskView(name='任务列表',endpoint='task'))
 
@@ -319,7 +320,7 @@ class DbTaskView(sqla.ModelView):
                 # login
                 return redirect(url_for('security.login', next=request.url))
 
-admin_bp.add_view(DbTaskView(DbTask, db.session, name='固化任务',endpoint='db-task',category='任务'))
+#admin_bp.add_view(DbTaskView(DbTask, db.session, name='固化任务',endpoint='db-task',category='任务'))
 
 # RedisCookieView
 class RedisCookieView(admin.BaseView):
@@ -328,13 +329,14 @@ class RedisCookieView(admin.BaseView):
         if request.method == 'POST':
             userIdStr = request.form.get('user_id')
         else:
-            userIdStr = request.args.get('user')
+            userIdStr = request.args.get('user_id')
 
         if userIdStr != None:
             userId = int(userIdStr)
+            #print "userno is %d" %(userId)
         else:
-            # default 0
-            userId = 0
+            # default 1
+            userId = 1
 
         # 获取表项数量
        
@@ -348,10 +350,12 @@ class RedisCookieView(admin.BaseView):
         userIdStr = request.args.get('user')
         if userIdStr != None:
             userId = int(userIdStr)
+            CNT = libcommon.clear_records(userId)
         else:
-            # default 0
-            userId = 0
-        CNT = libcommon.clear_records(userId)
+            # default all
+            for i in range(1,17):
+                userId = i
+                CNT = libcommon.clear_records(userId)      
         return redirect(url_for('redis-cookie.index', user=userId))
     
     @admin.expose('/alloc',methods=('GET', 'POST'))
@@ -359,12 +363,12 @@ class RedisCookieView(admin.BaseView):
         global g_stat
         if request.method == 'POST':
             renqi_req = request.form.get('renqi_req')
-            userIdStr = request.args.get('user')
+            userIdStr = request.form.get('user_id')
             if userIdStr != None:
                 userId = int(userIdStr)
             else:
-                # default 0
-                userId = 0
+                # default 1
+                userId = 1
             
             
             total = float(renqi_req)
@@ -373,6 +377,56 @@ class RedisCookieView(admin.BaseView):
             logger.debug('/alloc userId=%d renqi_req: %s alloced=%d'  %(userId, renqi_req, alloced))
 
         return redirect(url_for('redis-cookie.index', user=userId))
+
+    @admin.expose('/ck_json', methods=['GET'])
+    def ck_json(self):
+        ##调试模式传递IP
+        debug = request.args.get('debug')
+        if debug != None:
+            ip = request.args.get('ip')
+            if ip == None:
+                ip = '127.0.0.1'
+        else:
+            ##nginx 反向代理，获取真实IP
+            if request.headers.has_key('X-Forwarded-For') == True:
+                real_ip = request.headers['X-Forwarded-For']
+                if real_ip != None:
+                    if len(real_ip.split(',')) > 1:
+                        ip = real_ip.split(",")[1]
+                    else:
+                        ip = real_ip
+            else:
+                ##未使用nginx反向代理，获取真实IP
+                ip = request.remote_addr
+
+        userIdStr = request.args.get('user')
+        if userIdStr != None:
+            userId = int(userIdStr)
+        else:
+            # default 0
+            userId = 1
+        taskID = request.args.get('id')
+        crack = libredis.LibRedis(userId)
+        crack.hashincr('g_stat', 'req')
+        record = libcommon.get_record_from_redis(ip, userId)
+        if record == None:
+            record = libcommon.fetch_record_from_redis(ip, userId)
+        else:
+            crack.hashincr('g_stat', 'rereq')
+
+        if record == None:
+            cookie = "None"
+            crack.hashincr('g_stat', 'none')
+        else:
+            cookie = record['cookie']
+            crack.hashincr('g_stat', 'asigned')
+
+        rep = {'ip': ip, 'cookie': cookie}
+
+        libcommon.updateTaskCKReq(taskID)
+
+        # logger.debug(rep)
+        return jsonify(rep)
       
 admin_bp.add_view(RedisCookieView(name='缓存Cookie',endpoint='redis-cookie',category='Cookie'))
 
@@ -389,11 +443,11 @@ class CreateTaskView(admin.BaseView):
 
         order = libcommon.getOrder(order_id)
 
-        if order == None:
-            return redirect(url_for('Order.index_view'))
+        #if order == None:
+            #return redirect(url_for('Order.index_view'))
             #return self.render('admin/order.html',order=order)
-        else:
-            return self.render('admin/createtask.html',order=order)
+        #else:
+        return self.render('admin/createtask.html',order=order)
 
     @admin.expose('/submit_task', methods=['POST', 'GET'])
     def submit_task(self):
@@ -426,6 +480,9 @@ class CreateTaskView(admin.BaseView):
             ck_url = request.form.get('ck_url')
 
             order = libcommon.getOrder(order_id)
+            if order == None:
+                return redirect(url_for('Order.index_view'))
+
             room_url = libcommon.room_url(order['platform'], order['room_id'])
             ck_url = "http://127.0.0.1:8200/useradmin/cookie?user=%s" %(userId)
 
@@ -677,12 +734,12 @@ class OrderForm(Form):
 
     room_id = IntegerField('房间号', default=0)
 
-    platform_choices   = [('douyu', u'斗鱼'), ('huya', u'虎牙'), ('qie', u'企鹅')]
+    platform_choices   = [('douyu', u'斗鱼'), ('huya', u'虎牙'), ('egame', u'企鹅')]
     platform = SelectField(label=u'平台', choices=platform_choices)
 
     custom = StringField('工会')
 
-    type_choices   = [('renqi', u'人气'), ('huya', u'排名')]
+    type_choices   = [('renqi', u'人气'), ('paiming', u'排名')]
     order_type = SelectField(label=u'类型', choices=type_choices)
 
     

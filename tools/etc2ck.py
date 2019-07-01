@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 #
+from __future__ import print_function
 
 import sys
 import sys
@@ -13,6 +14,7 @@ import threading
 import json
 
 import random
+
 
 path = sys.argv[1]
 
@@ -56,8 +58,10 @@ def load_etc_cookie(path):
         fieldname = field['name']
         fieldvalue = field['value']
         cookie[fieldname] = fieldvalue
+        print ("%s=%s;" %(fieldname, fieldvalue), end=" ")
 
-    print cookie
+    #print cookie
+    print ("\n")
 
     return cookie
     
@@ -65,5 +69,5 @@ def load_etc_cookie(path):
 cookie = load_etc_cookie(path)
 
 
-print cookie
+#print cookie
 

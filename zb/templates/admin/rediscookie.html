@@ -16,7 +16,7 @@
 
                     <div class="input-group input-group-sm mb-3">
                        <select class="form-control" id="user_id" name="user_id" value="user">
-                            {% for i in range(0, 16) %}
+                            {% for i in range(1, 17) %}
                             <option value="{{ i }}">{{ i }}</option>
                             {% endfor %}
                          </select>
@@ -37,8 +37,21 @@
         </div>
 
         <div class="col-lg-5 col-xs-6">
-            <form class="form-inline" action="/admin/redis-cookie/alloc?user={{ user }}" enctype='multipart/form-data' method='POST'>
+            <form class="form-inline" action="/admin/redis-cookie/alloc" enctype='multipart/form-data' method='POST'>
                 <div class="row">
+
+                    <div class="input-group input-group-sm mb-3">
+                       UserId： 
+                    </div>
+
+                    <div class="input-group input-group-sm mb-3">
+                       <select class="form-control" id="user_id" name="user_id" value="user">
+                            {% for i in range(1, 17) %}
+                            <option value="{{ i }}">{{ i }}</option>
+                            {% endfor %}
+                         </select>
+                    </div>
+
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-primary btn-sm">分配CK</button>
                     </div>
@@ -56,7 +69,7 @@
         </div>
 
         <div class="col-md-2">
-            <form action="/admin/redis-cookie/clear?user={{ user }}" enctype='multipart/form-data' method='POST'>
+            <form action="/admin/redis-cookie/clear" enctype='multipart/form-data' method='POST'>
                 <div class="row">
                     <div class="col-md-3">
                         <button type="submit" class="btn btn-primary btn-sm">清空缓存</button>
