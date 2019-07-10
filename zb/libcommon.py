@@ -14,6 +14,7 @@ import time,datetime
 import globalvar as gl
 
 import re
+import socket
 
 global logger
 global CONF
@@ -652,11 +653,12 @@ def writeTaskToRedis(order_id, userId, room_url, ck_url, begin_time, total_time,
     task_timestamp = strToTimestamp(task['begin_time'])
     task['begin_timestamp'] = task_timestamp
 
+    cur_time_str = time.strftime("%Y%m%d%H%M%S", time.localtime())
     #获取任务数量
     #将任务存储在DB15中统一管理
     crack = libredis.LibRedis(15)
     Digit = crack.zCard(CONF['redis']['begintask'])
-    taskID = 'user%02d%04d' %(userId, Digit)
+    taskID = '%s%04d' %(cur_time_str, Digit)
     task['task_id'] = taskID
     task['ck_url'] = ck_url+'&id='+taskID
     content= '<t a="%d|20" flash="1" isBoot="0" ckul=%s s=%s><p a="%d,%d|0|0|5" /></t>' \
@@ -1165,6 +1167,19 @@ def renqi_alloc(userId, req_renqi):
 
     logger.debug("renqi_alloc: total_renqi=%d, req_renqi=%d, balance=%d" %(total_renqi, req_renqi, balance))
     return alloced
+
+
+def get_host_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip_addr = s.getsockname()[0]
+    finally:
+        s.close()
+
+    return ip_addr
+
+my_ip = get_host_ip()
 
 logger = gl.get_logger()
 CONF   = gl.get_conf()

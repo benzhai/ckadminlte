@@ -467,6 +467,9 @@ class CreateTaskView(admin.BaseView):
             gap_num = request.form.get('gap_num')
             userId = request.form.get('user_id')
 
+            #get server ip address
+            server_ip = get_host_ip()
+
 
             logger.debug('begin_time: %s, total_time:%s' %(begin_time, total_time))
             logger.debug('renqi_num: %s' %(renqi_num))
@@ -484,7 +487,7 @@ class CreateTaskView(admin.BaseView):
                 return redirect(url_for('Order.index_view'))
 
             room_url = libcommon.room_url(order['platform'], order['room_id'])
-            ck_url = "http://127.0.0.1:8200/useradmin/cookie?user=%s" %(userId)
+            ck_url = "http://%s:8200/admin/redis-cookie/ck_json?user=%s" %(server_ip, userId)
 
             logger.debug('room_url: %s, ck_url: %s' %(room_url, ck_url))
 
