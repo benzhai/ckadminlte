@@ -15,6 +15,9 @@ import globalvar as gl
 
 import re
 import socket
+import requests
+
+import urllib2
 
 global logger
 global CONF
@@ -71,18 +74,21 @@ def updateColdDateToDB(nickname,timestamp):
     return rv
 
 def fmt_cookie_parse(row):
+    record = {}
     record['id']       = row[0]
     record['nickname'] = row[2]
     record['password'] = row[3]
-    record['regdate']  = datetime.datetime.fromtimestamp(record[4])
-    record['lastdate'] = datetime.datetime.fromtimestamp(record[5])
-    record['colddate'] = datetime.datetime.fromtimestamp(record[6])
+    record['regdate']  = datetime.datetime.fromtimestamp(row[4])
+    record['lastdate'] = datetime.datetime.fromtimestamp(row[5])
+    record['colddate'] = datetime.datetime.fromtimestamp(row[6])
     record['ip']            = row[7]
     record['usednum']  = row[8]
     record['cookie']    = row[9]
+
+    return record
     
 
-def seample_cookie_parse(row):
+def sample_cookie_parse(row):
      # 名称,密码,Cookies
     record  = {}
     record['nickname']    = row[0]
@@ -111,19 +117,20 @@ def raw_cooke_parse(line):
     return record
 
 def cookie_csv_parse_for_db(line):
-    row = line.split(',')
+    #row = line.split(',')
     #logger.debug("cookie_csv_parse_for_db:  len(row) = %d!" , len(row))
     #logger.debug("cookie_csv_parse_for_db:  row[0] = %s!" , row[0])
     #logger.debug("cookie_csv_parse_for_db:  row[1] = %s!" , row[1])
     #logger.debug("cookie_csv_parse_for_db:  line = %s!" , line)
-    if len(row)  < 3:
-        record =  raw_cooke_parse(line)
-    elif len(row) == 3 :
-        record =  sample_cookie_parse()
-    elif len(row) == 11:
-       record =  fmt_cookie_parse(row)
-    else:
-        return None
+
+    #if len(row)  < 3:
+    record =  raw_cooke_parse(line)
+    #elif len(row) == 3 :
+     #   record =  sample_cookie_parse(row)
+    #elif len(row) == 11:
+     #  record =  fmt_cookie_parse(row)
+    #else:
+      #  return None
 
     return record
 
@@ -177,6 +184,7 @@ def writeFileToDB(file, group='G0'):
 
     #写入数据库
     for record in records:
+        time.sleep(0.01) 
         sql = libdb.LibDB().query_one('nickname', record['nickname'], CONF['database']['table'])
         if sql == False:
             ou['error'] = 1
@@ -661,10 +669,57 @@ def writeTaskToRedis(order_id, userId, room_url, ck_url, begin_time, total_time,
     taskID = '%s%04d' %(cur_time_str, Digit)
     task['task_id'] = taskID
     task['ck_url'] = ck_url+'&id='+taskID
-    content= '<t a="%d|20" flash="1" isBoot="0" ckul=%s s=%s><p a="%d,%d|0|0|5" /></t>' \
+    content= '<t a="%d|20" flash="1" isBoot="0" ck="%s" s="%s"><p a="%d,%d|0|0|5" /></t>' \
              %( (int(total_time)) * 60, task['ck_url'], room_url,(int(last_time_from)) * 60, (int(last_time_to)) * 60)
     task['content'] = content
     logger.info(task)
+
+    #submit task to server
+    e_timestamp = task_timestamp + 300
+    e_time_s =  time.localtime(e_timestamp)
+    s_time = task['begin_time']
+    e_time = time.strftime("%Y-%m-%d %H:%M:%S",e_time_s)
+    task_data = {"area":"",
+                 "del":0,
+                 "id":taskID,
+                 "ipid":"0",
+                 "level":"10",
+                 "line":"6",
+                 "list" : content,
+                 "name":"qieedj",
+                 "plan":[
+                     {
+                         "e" :  e_time,
+                         "ip" : user_num,
+                         "s" : s_time
+                         }
+                      ],
+                 "pv" : "10"
+                 }
+
+    jsonstr = json.dumps(task_data)
+    jsonstr_f ="[%s]" %(jsonstr)
+    datacode = urllib.quote(jsonstr_f)
+    param_list = "jsoncontent=%s&api=1" %(datacode)
+    #print (datacode)
+    #print (param_list)
+  #  post_headers = {'Content-type': 'application/x-www-form-urlencoded'}
+    #post_cnn = http.client.HTTPSConnection('www.veryjook.com:8091')
+   # post_cnn.request('POST', '/web/3th_internal.php', param_list, post_headers)
+    #response = post_cnn.getresponse()
+    server_url = "http://www.veryjook.com:8091/web/3th_internal.php"
+    post_openner = urllib2.build_opener()
+    task_rs = post_openner.open(server_url, param_list).read()
+    
+    if task_rs != taskID :
+        logger.info('submit to server fail %s %s', task_rs, taskID)
+        return False
+        
+
+    #print(re_task)
+    #print(re_task.text)
+    #print(re_task.content)
+
 
     # task写入redis
     rv = crack.hashMSet(taskID, task)
@@ -754,6 +809,8 @@ def room_url(platform, room_id):
         room_url = "https://www.huya.com/%s" %(room_id)
     elif platform == "egame":
         room_url = "https://egame.qq.com/%s" %(room_id)
+    elif platform == "specia":
+        room_url = "%s" %(room_id)
     else:
         room_url = "https://www.douyu.com/%s" %(room_id)
 
@@ -1109,6 +1166,7 @@ def cookie_num_for_renqi(userId, renqi):
         if cur_renqi > renqi:
             break;
 
+    cur_ck = cur_ck * 2
     return cur_ck
 
 def add_renqi(total, userId):
@@ -1176,10 +1234,7 @@ def get_host_ip():
         ip_addr = s.getsockname()[0]
     finally:
         s.close()
-
     return ip_addr
-
-my_ip = get_host_ip()
 
 logger = gl.get_logger()
 CONF   = gl.get_conf()

@@ -16,11 +16,11 @@ global logger
 class LibDB():
     def __init__(self):
         self.cong = pymysql.connect(host='127.0.0.1',
-                                    port=3306,
-                                    user='root',
-                                    password=CONF['database']['passwd'],
-                                    database=CONF['database']['db'],
-                                    charset='utf8')
+                                        port=3306,
+                                        user='root',
+                                        password=CONF['database']['passwd'],
+                                        database=CONF['database']['db'],
+                                        charset='utf8')
         self.curg = self.cong.cursor()
 
     def __del__(self):

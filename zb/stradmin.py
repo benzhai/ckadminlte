@@ -356,7 +356,7 @@ class RedisCookieView(admin.BaseView):
             for i in range(1,17):
                 userId = i
                 CNT = libcommon.clear_records(userId)      
-        return redirect(url_for('redis-cookie.index', user=userId))
+        return redirect(url_for('redis-cookie.index'))
     
     @admin.expose('/alloc',methods=('GET', 'POST'))
     def alloc(self):
@@ -468,7 +468,10 @@ class CreateTaskView(admin.BaseView):
             userId = request.form.get('user_id')
 
             #get server ip address
-            server_ip = get_host_ip()
+            server_ip = libcommon.get_host_ip()
+
+            #destination url for submitting  tasks
+            #server_url = "http://www.veryjook.com:8091/web/3th_internal.php"
 
 
             logger.debug('begin_time: %s, total_time:%s' %(begin_time, total_time))
@@ -508,6 +511,7 @@ class CreateTaskView(admin.BaseView):
                 cur_timestamp = begin_timestamp + (cur_min * 60)
                 cur_time_s =  time.localtime(cur_timestamp)
                 cur_time_f = time.strftime("%Y-%m-%dT%H:%M:%S",cur_time_s)
+
                 libcommon.writeTaskToRedis(order_id, userId, room_url, ck_url, cur_time_f, total_time, \
                                        ck_num, last_time_from, last_time_to, time_gap, gap_num)
                 cur_min += total_min
@@ -680,9 +684,9 @@ class GroupForm(Form):
                 grp = form.name.data
                 ou = libcommon.writeFileToDB(file, grp)
                 
-                if ou['error'] == 0:
-                    form.number.data = ou['data']['num']
-                    return True
+                #if ou['error'] == 0:
+                form.number.data = ou['data']['num']
+                return True
                 
         return False
 
@@ -737,7 +741,7 @@ class OrderForm(Form):
 
     room_id = IntegerField('房间号', default=0)
 
-    platform_choices   = [('douyu', u'斗鱼'), ('huya', u'虎牙'), ('egame', u'企鹅')]
+    platform_choices   = [('douyu', u'斗鱼'), ('huya', u'虎牙'), ('egame', u'企鹅'), ('specia', u'指定')]
     platform = SelectField(label=u'平台', choices=platform_choices)
 
     custom = StringField('工会')
