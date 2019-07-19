@@ -759,7 +759,7 @@ class OrderForm(Form):
 
     #name = StringField('名称')
 
-    room_id = IntegerField('房间号', default=0)
+    room_id = StringField('房间号', default=0)
 
     platform_choices   = [('douyu', u'斗鱼'), ('huya', u'虎牙'), ('egame', u'企鹅'), ('specia', u'指定')]
     platform = SelectField(label=u'平台', choices=platform_choices)
