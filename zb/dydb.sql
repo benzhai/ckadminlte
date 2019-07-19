@@ -23,7 +23,7 @@ DROP TABLE IF EXISTS `cktb`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `cktb` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '用户id',
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
   `uid` mediumint(8) unsigned NOT NULL DEFAULT '0' COMMENT '用户id',
   `nickname` char(20) NOT NULL DEFAULT '' COMMENT '昵称',
   `password` char(32) NOT NULL DEFAULT '' COMMENT '密码',
@@ -36,7 +36,7 @@ CREATE TABLE `cktb` (
   `usednum` int(10) unsigned NOT NULL DEFAULT '0' COMMENT '取用次数',
   `cookie` text NOT NULL COMMENT 'cookie',
   `update_fail` int(10) unsigned NOT NULL DEFAULT '0' COMMENT 'cookie 更新失败次数',
-  `old` tinyint(1) DEFAULT '0' COMMENT '账号熟悉，1表示旧账号，0表示新账号',
+  `avaiable` tinyint(1) DEFAULT '0' COMMENT '可用状态，0表示可以用，1表示被占用',
   PRIMARY KEY (`id`),
   UNIQUE KEY `nickname` (`nickname`) USING BTREE
 ) ENGINE=MyISAM AUTO_INCREMENT=19127 DEFAULT CHARSET=utf8;

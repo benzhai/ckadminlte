@@ -106,12 +106,10 @@ def raw_cooke_parse(line):
     record  = {}
     record['uid'] = result[0]
     record['nickname']    = result[0]
+    record['uid'] = ""
     record['password']    = ""
     record['cookie']        = line
     
-
-    
-
     logger.debug("raw_cooke_parse: result =%s record['uid'] = %s" %(result, record['uid']))
 
     return record
@@ -184,24 +182,24 @@ def writeFileToDB(file, group='G0'):
 
     #写入数据库
     for record in records:
-        time.sleep(0.01) 
-        sql = libdb.LibDB().query_one('nickname', record['nickname'], CONF['database']['table'])
-        if sql == False:
+        #time.sleep(0.01) 
+        #sql = libdb.LibDB().query_one('nickname', record['nickname'], CONF['database']['table'])
+        #if sql == False:
+            #ou['error'] = 1
+            #ou['msg']   = '读数据库失败'
+            #continue
+       # if sql == None:
+        rv = cookieWriteToDB(record['nickname'], record['password'], record['cookie'], group)
+        if rv != True:
             ou['error'] = 1
-            ou['msg']   = '读数据库失败'
+            ou['msg']   = '写数据库失败'
             continue
-        if sql == None:
-            rv = cookieWriteToDB(record['nickname'], record['password'], record['cookie'], group)
-            if rv != True:
-                ou['error'] = 1
-                ou['msg']   = '写数据库失败'
-                continue
-        else:
-            rv = cookieUpdateToDB(record['nickname'], record['password'], record['cookie'])
-            if rv != True:
-                ou['error'] = 1
-                ou['msg']   = '更新数据库失败'
-                continue
+        #else:
+            #rv = cookieUpdateToDB(record['nickname'], record['password'], record['cookie'])
+            #if rv != True:
+                #ou['error'] = 1
+                #ou['msg']   = '更新数据库失败'
+                #continue
     return ou
 
 def cookie_append(records):
@@ -1166,7 +1164,7 @@ def cookie_num_for_renqi(userId, renqi):
         if cur_renqi > renqi:
             break;
 
-    cur_ck = cur_ck * 2
+    cur_ck = cur_ck * 3
     return cur_ck
 
 def add_renqi(total, userId):

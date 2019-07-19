@@ -7,4 +7,5 @@
 {% block list_row_actions %} 
     {{ super() }} 
     <a href="/admin/group_export/?id={{ get_pk_value(row) }}">导出</a>
+    <a href="/admin/delgrp/?id={{ get_pk_value(row) }}">删除</a>
 {% endblock %}

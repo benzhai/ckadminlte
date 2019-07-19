@@ -38,6 +38,7 @@ db = admin_db_bp
 g_stat = {"cycle":1, "pos":0,'could_use':0, "total":0, "total_renqi":0, "asigned":0, "req":0, "rereq":0, "none":0, "boot_ts": libcommon.now(), "reset_ts":libcommon.now()}
 g_records = []
 
+g_rj_request_no = 0
 
 def cookie_append(records):
     global g_records, g_stat
@@ -196,6 +197,17 @@ class MyHomeView(admin.AdminIndexView):
         g_stat['could_use'] = Digit
         tasks = libcommon.getTaskList()
         return self.render("console.html", g_stat=g_stat, task_records=tasks)
+
+    @admin.expose('/delgrp/', methods=['POST', 'GET'])
+    def delgrp(self):
+        group_id = request.args.get('id')
+        if group_id != None:
+            grp_re = libdb.LibDB().query_by_id(group_id, CONF['database']['grptb'])
+            grp_condition = "where id=%s" %(group_id)
+            ck_condition = "where grp='%s'" %(grp_re[1])
+            rv = libdb.LibDB().del_db(grp_condition, CONF['database']['grptb'])
+            rv = libdb.LibDB().del_db(ck_condition, CONF['database']['table'])
+        return redirect(url_for('admin.index'))
 
 admin_bp = admin.Admin(name="CK控制台",base_template='my_master.html',index_view=MyHomeView(url='/admin',endpoint='admin'),template_mode='bootstrap3')
 
@@ -399,6 +411,12 @@ class RedisCookieView(admin.BaseView):
                 ##未使用nginx反向代理，获取真实IP
                 ip = request.remote_addr
 
+        global g_rj_request_no
+        g_rj_request_no += 1
+        if g_rj_request_no % 10 != 0:
+            rep = {'ip': ip, 'cookie': ''}
+            return jsonify(rep)
+        
         userIdStr = request.args.get('user')
         if userIdStr != None:
             userId = int(userIdStr)
@@ -424,8 +442,6 @@ class RedisCookieView(admin.BaseView):
         rep = {'ip': ip, 'cookie': cookie}
 
         libcommon.updateTaskCKReq(taskID)
-
-        # logger.debug(rep)
         return jsonify(rep)
       
 admin_bp.add_view(RedisCookieView(name='缓存Cookie',endpoint='redis-cookie',category='Cookie'))
@@ -543,6 +559,8 @@ class DbCookie(db.Model):
 
     def __repr__(self):
         return "{}: {}".format(self.id, self.__str__())
+
+
 
 class DbCookieView(sqla.ModelView):
     #can_create = False
@@ -709,6 +727,7 @@ class GroupView(sqla.ModelView):
     list_template = 'admin/group.html'
     model_form_converter = GroupModelConverter
     action_disallowed_list = ['delete', ]
+    can_delete = False
     can_view_details = True
     column_display_pk = True
     can_export = True
@@ -729,6 +748,7 @@ class GroupView(sqla.ModelView):
     ]
     #column_default_sort = [('nickname', False), ('password', False)]  # sort on multiple columns
     column_default_sort = [('id', False)]  # sort by field id
+
 admin_bp.add_view(GroupView(Group,  db.session,name='Cookie组', endpoint='Group', category='Cookie'))
 
 
