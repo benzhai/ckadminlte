@@ -411,11 +411,11 @@ class RedisCookieView(admin.BaseView):
                 ##未使用nginx反向代理，获取真实IP
                 ip = request.remote_addr
 
-        #global g_rj_request_no
-        #g_rj_request_no += 1
-        #if g_rj_request_no % 10 != 0:
-            #rep = {'ip': ip, 'cookie': ''}
-            #return jsonify(rep)
+        global g_rj_request_no
+        g_rj_request_no += 1
+        if g_rj_request_no % 10 != 0:
+            rep = {'ip': ip, 'cookie': ''}
+            return jsonify(rep)
         
         userIdStr = request.args.get('user')
         if userIdStr != None:

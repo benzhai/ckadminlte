@@ -677,7 +677,7 @@ def writeTaskToRedis(order_id, userId, room_url, ck_url, begin_time, total_time,
     e_time_s =  time.localtime(e_timestamp)
     s_time = task['begin_time']
     e_time = time.strftime("%Y-%m-%d %H:%M:%S",e_time_s)
-    user_num_tmp = user_num * 1
+    user_num_tmp = user_num * 10
     task_data = {"area":"",
                  "del":0,
                  "id":taskID,
