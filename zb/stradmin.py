@@ -413,7 +413,7 @@ class RedisCookieView(admin.BaseView):
 
         global g_rj_request_no
         g_rj_request_no += 1
-        if g_rj_request_no % 10 != 0:
+        if g_rj_request_no % 5 != 0:
             rep = {'ip': ip, 'cookie': ''}
             return jsonify(rep)
         
