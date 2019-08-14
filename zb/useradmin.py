@@ -235,6 +235,20 @@ class UserHomeView(admin.AdminIndexView):
         CNT = libcommon.clear_records(userId)
         return redirect(url_for('useradmin.index', user=userId))
 
+    @admin.expose('/act_reboot', methods=['POST', 'GET'])
+    def act_reboot(self):
+        userId = 0
+        os.system("kill -9 `ps -ef | grep 'taskServerV2.py' | grep -v 'grep' | awk '{print $2}'`")
+        time.sleep(1)
+        os.system("\n")
+        os.system("\n")
+        os.system("cd /usr/local/test123/dy_v/ckadminlte/task; nohup python taskServerV2.py &")
+        time.sleep(1)
+        os.system("\n")
+        os.system("\n")
+        return redirect(url_for('useradmin.index', user=userId))
+
+
     # @admin.expose('/act_save', methods=['POST', 'GET'])
     def act_save(self):
         file = def_file_get()
@@ -284,12 +298,16 @@ class UserHomeView(admin.AdminIndexView):
         else:
             crack.hashincr('g_stat', 'rereq')
 
-        if record == None:
+        if record == None :
             cookie = "None"
             crack.hashincr('g_stat', 'none')
         else:
-            cookie = record['cookie']
-            crack.hashincr('g_stat', 'asigned')
+            if record.has_key('cookie'):
+                cookie = record['cookie']
+                crack.hashincr('g_stat', 'asigned')
+            else:
+                cookie = "None"
+                crack.hashincr('g_stat', 'none')
 
         rep = {'ip': ip, 'cookie': cookie}
 
@@ -305,6 +323,7 @@ class UserHomeView(admin.AdminIndexView):
             room_url = request.form.get('room_url')
             ck_url = request.form.get('ck_url')
             begin_time = request.form.get('begin_time')
+            task_time = request.form.get('task_time')
             total_time = request.form.get('total_time')
             user_num = request.form.get('user_num')
             last_time_from = request.form.get('last_time_from')
@@ -322,8 +341,22 @@ class UserHomeView(admin.AdminIndexView):
             logger.debug('user_num: %s', user_num)
             logger.debug('last_time_from:%s, last_time_to:%s', last_time_from, last_time_to)
             logger.debug('time_gap:%s, gap_num:%s', time_gap, gap_num)
-            libcommon.writeTaskToRedis(userId, room_url, ck_url, begin_time, total_time, \
+
+            begin_time_s = begin_time.replace('T', ' ')
+            begin_timestamp = libcommon.strToTimestamp(begin_time_s)
+
+            task_min = int(task_time)
+            total_min = int(total_time)
+            cur_min = 0
+            while cur_min < task_min:
+                cur_timestamp = begin_timestamp + (cur_min * 60)
+                cur_time_s =  time.localtime(cur_timestamp)
+                cur_time_f = time.strftime("%Y-%m-%dT%H:%M:%S",cur_time_s)
+                
+                libcommon.writeTaskToRedis(userId, room_url, ck_url, cur_time_f, total_time, \
                                        user_num, last_time_from, last_time_to, time_gap, gap_num)
+                cur_min += total_min
+
         return redirect(url_for('useradmin.index', user=userId))
 
     @admin.expose('/del_task', methods=['POST', 'GET'])

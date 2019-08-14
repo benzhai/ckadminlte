@@ -12,26 +12,19 @@ import chardet
 import urllib
 import time,datetime
 import globalvar as gl
-
 import re
-import socket
-import requests
-
-import urllib2
 
 global logger
 global CONF
-
 
 def now():
     return time.strftime("%m-%d %H:%M:%S", time.localtime())
 
 def cookieWriteToDB(nickname, pwd, cookie, grp):
     key = "nickname, password, grp, regdate, lastdate, colddate, cookie"
-    value = "'%s', '%s', '%s', '%d', '%d', '%d', '%s'" \
-               % (nickname, pwd, grp, \
-                    int(time.time()), int(time.time()), \
-                    int(time.time()), cookie)
+    value = "'%s', '%s', '%s', '%d', '%d', '%d', '%s'" % (nickname, pwd, grp, \
+                                                    int(time.time()), int(time.time()), \
+                                                    int(time.time()), cookie)
     logger.debug('key:%s, value:%s', key, value)
     rv = libdb.LibDB().insert_db(key, value, CONF['database']['table'])
     return rv
@@ -73,30 +66,6 @@ def updateColdDateToDB(nickname,timestamp):
     rv = libdb.LibDB().update_db(setval, condition, CONF['database']['table'])
     return rv
 
-def fmt_cookie_parse(row):
-    record = {}
-    record['id']       = row[0]
-    record['nickname'] = row[2]
-    record['password'] = row[3]
-    record['regdate']  = datetime.datetime.fromtimestamp(row[4])
-    record['lastdate'] = datetime.datetime.fromtimestamp(row[5])
-    record['colddate'] = datetime.datetime.fromtimestamp(row[6])
-    record['ip']            = row[7]
-    record['usednum']  = row[8]
-    record['cookie']    = row[9]
-
-    return record
-    
-
-def sample_cookie_parse(row):
-     # 名称,密码,Cookies
-    record  = {}
-    record['nickname']    = row[0]
-    record['password']    = row[1]
-    record['cookie']        = row[2]
-
-    return record
-
 def raw_cooke_parse(line):
 
     result   =  re.findall(r"uid\=(.+?);",line)    
@@ -114,22 +83,11 @@ def raw_cooke_parse(line):
 
     return record
 
+
+
 def cookie_csv_parse_for_db(line):
-    #row = line.split(',')
-    #logger.debug("cookie_csv_parse_for_db:  len(row) = %d!" , len(row))
-    #logger.debug("cookie_csv_parse_for_db:  row[0] = %s!" , row[0])
-    #logger.debug("cookie_csv_parse_for_db:  row[1] = %s!" , row[1])
-    #logger.debug("cookie_csv_parse_for_db:  line = %s!" , line)
-
-    #if len(row)  < 3:
+    record  = {}
     record =  raw_cooke_parse(line)
-    #elif len(row) == 3 :
-     #   record =  sample_cookie_parse(row)
-    #elif len(row) == 11:
-     #  record =  fmt_cookie_parse(row)
-    #else:
-      #  return None
-
     return record
 
 def cookie_load_for_db(path):
@@ -659,66 +617,18 @@ def writeTaskToRedis(order_id, userId, room_url, ck_url, begin_time, total_time,
     task_timestamp = strToTimestamp(task['begin_time'])
     task['begin_timestamp'] = task_timestamp
 
-    cur_time_str = time.strftime("%Y%m%d%H%M%S", time.localtime())
     #获取任务数量
     #将任务存储在DB15中统一管理
     crack = libredis.LibRedis(15)
     Digit = crack.zCard(CONF['redis']['begintask'])
-    taskID = '%s%04d' %(cur_time_str, Digit)
+    taskID = 'user%02d%d%03d' %(userId, task_timestamp, Digit)
     task['task_id'] = taskID
     task['ck_url'] = ck_url+'&id='+taskID
+    task_timeout = (int(last_time_to)) * 2 + 5
     content= '<t a="%d|20" ck="%s" s="%s"><p a="%d,%d|0|0|5" /></t>' \
-             %( (int(total_time)) * 60, task['ck_url'], room_url,(int(last_time_from)) * 60, (int(last_time_to)) * 60)
+             %( (int(task_timeout)) * 60, task['ck_url'], room_url,(int(last_time_from)) * 60, (int(last_time_to)) * 60)
     task['content'] = content
     logger.info(task)
-
-    #submit task to server
-    e_timestamp = task_timestamp + 800
-    e_time_s =  time.localtime(e_timestamp)
-    s_time = task['begin_time']
-    e_time = time.strftime("%Y-%m-%d %H:%M:%S",e_time_s)
-    user_num_tmp = user_num * 5
-    task_data = {"area":"",
-                 "del":0,
-                 "id":taskID,
-                 "ipid":"0",
-                 "level":"10",
-                 "line":"6",
-                 "list" : content,
-                 "name":"qieedj",
-                 "plan":[
-                     {
-                         "e" :  e_time,
-                         "ip" : user_num_tmp,
-                         "s" : s_time
-                         }
-                      ],
-                 "pv" : "10"
-                 }
-
-    jsonstr = json.dumps(task_data)
-    jsonstr_f ="[%s]" %(jsonstr)
-    datacode = urllib.quote(jsonstr_f)
-    param_list = "jsoncontent=%s&api=1" %(datacode)
-    #print (datacode)
-    #print (param_list)
-  #  post_headers = {'Content-type': 'application/x-www-form-urlencoded'}
-    #post_cnn = http.client.HTTPSConnection('www.veryjook.com:8091')
-   # post_cnn.request('POST', '/web/3th_internal.php', param_list, post_headers)
-    #response = post_cnn.getresponse()
-    server_url = "http://www.veryjook.com:8091/web/3th_internal.php"
-    post_openner = urllib2.build_opener()
-    task_rs = post_openner.open(server_url, param_list).read()
-    
-    if task_rs != taskID :
-        logger.info('submit to server fail %s %s', task_rs, taskID)
-        return False
-        
-
-    #print(re_task)
-    #print(re_task.text)
-    #print(re_task.content)
-
 
     # task写入redis
     rv = crack.hashMSet(taskID, task)
@@ -787,16 +697,17 @@ def parseOrder(record):
     order = dict()
     order['id'] = record[0]
     order['status'] = record[1]
-    order['custom'] = record[2]
-    order['platform'] = record[3]  
-    order['room_id'] = record[4]
-    order['order_type'] = record[5]
-    order['renqi'] = record[6]
-    order['income'] = record[7]
-    order['ctime'] = record[8]
-    order['sdate'] = record[9]
-    order['edate'] = record[10]
-    order['note'] = record[11]
+    order['name'] = record[2]
+    order['custom'] = record[3]
+    order['platform'] = record[4]  
+    order['room_id'] = record[5]
+    order['order_type'] = record[6]
+    order['renqi'] = record[7]
+    order['income'] = record[8]
+    order['ctime'] = record[9]
+    order['sdate'] = record[10]
+    order['edate'] = record[11]
+    order['note'] = record[12]
 
     return order
 
@@ -1146,7 +1057,7 @@ def total_renqi_get(userId):
         logger.debug("renqi_to_cookies:cookie=%s" %(cookie))
 
         if cookie:
-            cur_renqi += float(cookie['radio'])
+            cur_renqi += float(cookie['ratio'])
             cur_ck += 1
 
         #logger.debug("renqi_to_cookies: cur_ck=%d, cur_renqi=%d" %(cur_ck, cur_renqi))
@@ -1160,12 +1071,11 @@ def cookie_num_for_renqi(userId, renqi):
     cur_renqi = 0
     logger.debug("renqi_to_cookies: userId=%d, renqi=%d, len(cookies)=%d" %(userId, renqi, len(cookies)))
     for cookie in cookies:
-        cur_renqi += float(cookie['radio'])
+        cur_renqi += float(cookie['ratio'])
         cur_ck += 1
         if cur_renqi > renqi:
             break;
 
-    cur_ck = cur_ck * 3
     return cur_ck
 
 def add_renqi(total, userId):
@@ -1193,19 +1103,19 @@ def add_renqi(total, userId):
         t['nickname'] = record[2]
         t['password'] = record[3]
         t['grp'] = record[4]
-        t['radio'] = record[5]
+        t['ratio'] = record[5]
         t['regtime']  = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(record[6])))
         t['uptime']   = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(record[7])))
         
         t['cookie']   = record[11]
 
-        alloced += t['radio']
+        alloced += t['ratio']
 
         rcs.append(t)
         logger.info(t)
 
         allocUserCK(t['id'], userId)
-        crack.hashincrfloat('g_stat', 'total_renqi', t['radio'])
+        crack.hashincrfloat('g_stat', 'total_renqi', t['ratio'])
         if alloced >= total:
             break
 

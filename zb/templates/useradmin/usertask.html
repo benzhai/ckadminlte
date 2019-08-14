@@ -16,7 +16,7 @@
         &nbsp;
     </label>
     <div class="col-md-10">
-      <input class="form-control" id="ck_url" name="ck_url" type="text" value="http://47.244.4.117:8200/useradmin/cookie?user={{ user }}">
+      <input class="form-control" id="ck_url" name="ck_url" type="text" value="http://154.220.2.89:8200/useradmin/cookie?user={{ user }}">
     </div>
 </div>
 
@@ -29,9 +29,17 @@
     </div>
 </div>
 
+<div class="form-group">
+    <label for="total_time" class="col-md-2 control-label">总任务时间(分钟)
+        &nbsp;
+    </label>
+    <div class="col-md-10">
+      <input class="form-control" id="task_time" name="task_time" type="text"  value="{{ task_records['total_time'] }}">
+    </div>
+  </div>
 
   <div class="form-group">
-    <label for="total_time" class="col-md-2 control-label">任务总时间(分钟)
+    <label for="total_time" class="col-md-2 control-label">单任务时间(分钟)
         &nbsp;
     </label>
     <div class="col-md-10">
