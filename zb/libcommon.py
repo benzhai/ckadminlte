@@ -14,6 +14,9 @@ import time,datetime
 import globalvar as gl
 import re
 
+import socket
+import requests
+
 global logger
 global CONF
 
@@ -1137,13 +1140,15 @@ def renqi_alloc(userId, req_renqi):
 
 
 def get_host_ip():
+    l_soc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(('8.8.8.8', 80))
-        ip_addr = s.getsockname()[0]
+        l_soc.connect(('8.8.8.8', 80))
+        ip_addr = l_soc.getsockname()[0]
     finally:
-        s.close()
+        l_soc.close()
+
     return ip_addr
+
 
 logger = gl.get_logger()
 CONF   = gl.get_conf()
